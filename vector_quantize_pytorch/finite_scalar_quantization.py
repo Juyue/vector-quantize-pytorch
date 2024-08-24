@@ -179,6 +179,7 @@ class FSQ(Module):
             z, ps = pack_one(z, 'b * d')
 
         assert z.shape[-1] == self.dim, f'expected dimension of {self.dim} but found dimension of {z.shape[-1]}'
+        import pdb; pdb.set_trace()
 
         z = self.project_in(z)
 
@@ -194,7 +195,7 @@ class FSQ(Module):
 
             if force_f32 and orig_dtype not in self.allowed_dtypes:
                 z = z.float()
-
+            
             codes = self.quantize(z)
 
             # returning indices could be optional

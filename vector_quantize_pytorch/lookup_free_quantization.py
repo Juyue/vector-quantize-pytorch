@@ -261,15 +261,14 @@ class LFQ(Module):
         d - feature dimension, which is also log2(codebook size)
         c - number of codebook dim
         """
-
         is_img_or_video = x.ndim >= 4
         should_transpose = default(self.channel_first, is_img_or_video)
 
         # standardize image or video into (batch, seq, dimension)
 
         if should_transpose:
-            x = rearrange(x, 'b d ... -> b ... d')
-            x, ps = pack_one(x, 'b * d')
+            x = rearrange(x, 'b d ... -> b ... d') # (b, d, h, w) -> (b, h, w, d)
+            x, ps = pack_one(x, 'b * d') # (b, h, w, d) -> (b, h * w, d)
 
         assert x.shape[-1] == self.dim, f'expected dimension of {self.dim} but received {x.shape[-1]}'
 
@@ -305,12 +304,12 @@ class LFQ(Module):
 
             original_input = x
 
-            codebook_value = torch.ones_like(x) * self.codebook_scale
-            quantized = torch.where(x > 0, codebook_value, -codebook_value)
+            codebook_value = torch.ones_like(x) * self.codebook_scale # (b, n, c, d), (1, 1024, 1, 16)
+            quantized = torch.where(x > 0, codebook_value, -codebook_value) # (b, n, c, d)
 
             # calculate indices
 
-            indices = reduce((quantized > 0).int() * self.mask.int(), 'b n c d -> b n c', 'sum')
+            indices = reduce((quantized > 0).int() * self.mask.int(), 'b n c d -> b n c', 'sum') # (b, n, c), one interger for each example
 
             # maybe l2norm
 
@@ -334,9 +333,9 @@ class LFQ(Module):
                 codebook = self.maybe_l2norm(codebook)
 
                 # the same as euclidean distance up to a constant
-                distance = -2 * einsum('... i d, j d -> ... i j', original_input, codebook)
+                distance = -2 * einsum('... i d, j d -> ... i j', original_input, codebook) # This distance is weird? 
 
-                prob = (-distance * inv_temperature).softmax(dim = -1)
+                prob = (-distance * inv_temperature).softmax(dim = -1) # (b, n, c1, 65536)
 
                 # account for mask
 
@@ -361,7 +360,7 @@ class LFQ(Module):
 
                 # distribution over all available tokens in the batch
 
-                avg_prob = reduce(per_sample_probs, '... c d -> c d', 'mean')
+                avg_prob = reduce(per_sample_probs, '... c d -> c d', 'mean') # average over batch and sequence; each category has a probability.
 
                 avg_prob = maybe_distributed_mean(avg_prob)
 

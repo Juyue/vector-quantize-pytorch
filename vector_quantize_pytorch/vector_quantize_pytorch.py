@@ -487,13 +487,13 @@ class EuclideanCodebook(Module):
             codebook_std = self.codebook_variance.clamp(min = 1e-5).sqrt()
             batch_std = self.batch_variance.clamp(min = 1e-5).sqrt()
             embed = (embed - self.codebook_mean) * (batch_std / codebook_std) + self.batch_mean
-
-        dist = -cdist(flatten, embed)
+        
+        dist = -cdist(flatten, embed) # (b, n, d), (b, k, d) -> (b, n, k)
 
         embed_ind, embed_onehot = self.gumbel_sample(dist, dim = -1, temperature = sample_codebook_temp, training = self.training)
 
         embed_ind = unpack_one(embed_ind, ps, 'h *')
-
+        
         if self.training:
             unpacked_onehot = unpack_one(embed_onehot, ps, 'h * c')
             quantize = einsum('h b n c, h c d -> h b n d', unpacked_onehot, embed)
@@ -946,7 +946,6 @@ class VectorQuantize(Module):
         )
 
         # quantize
-
         quantize, embed_ind, distances = self._codebook(x, **codebook_forward_kwargs)
 
         # losses for loss breakdown
@@ -954,7 +953,7 @@ class VectorQuantize(Module):
         commit_loss = orthogonal_reg_loss = inplace_optimize_loss = codebook_diversity_loss = self.zero
 
         # one step in-place update
-
+        # TODO: Where does this come from? Interesting
         if should_inplace_optimize and self.training and not freeze_codebook:
 
             if exists(mask):
@@ -989,6 +988,7 @@ class VectorQuantize(Module):
 
             quantize = x + (quantize - x).detach()
 
+            # TODO: Where does this come from? Interesting
             if self.sync_update_v > 0.:
                 # (21) in https://minyoungg.github.io/vqtorch/assets/draft_050523.pdf
                 quantize = quantize + self.sync_update_v * (quantize - quantize.detach())
@@ -996,6 +996,7 @@ class VectorQuantize(Module):
         # function for calculating cross entropy loss to distance matrix
         # used for (1) naturalspeech2 training residual vq latents to be close to the correct codes and (2) cross-entropy based commitment loss
 
+        # TODO: Where does this come from? Interesting
         def calculate_ce_loss(codes):
             if not is_multiheaded:
                 dist_einops_eq = '1 b n l -> b l n'
@@ -1013,7 +1014,7 @@ class VectorQuantize(Module):
             return ce_loss
 
         # if returning cross entropy loss on codes that were passed in
-
+ 
         if return_loss:
             return quantize, calculate_ce_loss(indices)
 
